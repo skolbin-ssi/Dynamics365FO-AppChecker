@@ -31,27 +31,9 @@ namespace XppReasoningWpf
     /// </summary>
     public partial class MainWindow : Window
     {
-        // public static ICommand ExitCommand = new ApplicationExitCommand();
+        public Model Model { get; set; }
 
-        public static ICommand SaveResultCommand = new RoutedUICommand("Save Result", "SaveResult", typeof(MainWindow));
-
-        public static ICommand IncreaseQueryFontSizeCommand = new RoutedUICommand("Increase query font size", "IncreaseQueryFontSize", typeof(MainWindow));
-        public static ICommand DecreaseQueryFontSizeCommand = new RoutedUICommand("Decrease query font size", "DecreaseQueryFontSize", typeof(MainWindow));
-        public static ICommand IncreaseSourceFontSizeCommand = new RoutedUICommand("Increase source font size", "IncreaseSourceFontSize", typeof(MainWindow));
-        public static ICommand DecreaseSourceFontSizeCommand = new RoutedUICommand("Decrease source font size", "DecreaseSourceFontSize", typeof(MainWindow));
-        public static ICommand IncreaseResultsFontSizeCommand = new RoutedUICommand("Increase results font size", "IncreaseResultsFontSize", typeof(MainWindow));
-        public static ICommand DecreaseResultsFontSizeCommand = new RoutedUICommand("Decrease results font size", "DecreaseResultsFontSize", typeof(MainWindow));
-        public static ICommand ShowExternalVariablesDialogCommand = new RoutedUICommand("External Variables", "ExternalVariables", typeof(MainWindow));
-
-        public static ICommand ExecuteHelpXQueryCommand = new RoutedUICommand("Help for XQuery", "HelpForXQuery", typeof(MainWindow));
-        public static ICommand ExecuteHelpBaseXCommand = new RoutedUICommand("Help for BaseX", "HelpForBaseX", typeof(MainWindow));
-
-        public static ICommand AboutBoxCommand =
-            new RoutedUICommand("About", "About", typeof(MainWindow));
-
-        public Model Model;
-
-        private ViewModels.ViewModel ViewModel;
+        private readonly ViewModels.ViewModel ViewModel;
 
         public MainWindow()
         {
@@ -60,13 +42,12 @@ namespace XppReasoningWpf
             Thread.Sleep(2000);
 
             this.Model = new Model();
+            this.ViewModel = new ViewModels.ViewModel(this, this.Model);
+            this.DataContext = this.ViewModel;
 
             Properties.Settings.Default.PropertyChanged += SettingsChanged;
 
             InitializeComponent();
-
-            this.ViewModel = new ViewModels.ViewModel(this, this.Model);
-            this.DataContext = this.ViewModel;
 
             // For some reason this is required for getting the commandparameter 
             // binding mechanism to work for menu items
@@ -92,7 +73,7 @@ namespace XppReasoningWpf
             {
                 // This call may throw when Basex complains when connecting or
                 // asking for the active databases.
-                this.PopulateUIFromServer();
+                this.PopulateUIFromServerAsync();
             }
             catch(Exception e)
             {
@@ -115,9 +96,9 @@ namespace XppReasoningWpf
             Properties.Settings.Default.Save();
         }
 
-        private void PopulateUIFromServer()
+        private async void PopulateUIFromServerAsync()
         {
-            Model.Databases = this.Model.Server.GetDatabases();
+            Model.Databases = await this.Model.Server.GetDatabasesAsync();
 
             // Initialize the model dropdown from the value stored in the settings
             // If that value no longer exists, set it to the first one.
@@ -173,51 +154,23 @@ namespace XppReasoningWpf
         /// Called when the system is irretrievably closing down
         /// </summary>
         /// <param name="e">Not used</param>
-        protected override void OnClosed(EventArgs e)
+        protected async override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
 
-            this.ViewModel.Closedown();
-        }
-
-        private void CommandBinding_SaveResultExecuted(object sender, ExecutedRoutedEventArgs e)
-        {
-            SaveFileDialog dialog = new SaveFileDialog
-            {
-                DefaultExt = ".xml",
-                AddExtension = true,
-                Filter = "XML files (*.xml)|*.xml|CSV (Comma delimited) (*.csv)|*.csv|All files (*.*)|*.*",
-            };
-
-            var documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            dialog.InitialDirectory = string.Format(Properties.Settings.Default.QueriesPath, documentsFolder);
-
-            bool? res = dialog.ShowDialog();
-
-            if (res.HasValue && res.Value)
-            {
-                var stream = dialog.OpenFile();
-                this.ResultsEditor.Save(stream);
-            }
-        }
-
-        private void CommandBinding_SaveResultCanExecute(object sender, CanExecuteRoutedEventArgs e)
-        {
-            e.CanExecute = true;
+            await this.ViewModel.ClosedownAsync();
         }
 
         private static bool IsCompoundName(string name)
         {
             var parts = name.Split(':');
-            return parts.Count() == 2;
+            return parts.Length == 2;
         }
 
         private async Task<string> GetSourceDocAsync(string query)
         {
-            using (var session = this.Model.GetSession(this.Model.SelectedDatabase.Name))
-            {
-                return await session.DoQueryAsync(query);
-            }
+            using var session = await this.Model.GetSessionAsync(this.Model.SelectedDatabase.Name);
+            return await session.DoQueryAsync(query);
         }
 
         /// <summary>
@@ -263,7 +216,7 @@ namespace XppReasoningWpf
                 }
                 else if (language == "C#")
                 {
-                    string xquery = "No source for " + name;
+                    string xquery;
                     if (IsCompoundName(name))
                     {
                         var parts = name.Split(':');
@@ -350,7 +303,7 @@ namespace XppReasoningWpf
                             FindPositionsInSelfOrAncestor(positionElement, ref sl, ref sc, ref el, ref ec);
 
                             if (rootArtifact.Attribute("Name") != null && !string.IsNullOrEmpty(rootArtifact.Attribute("Name").Value))
-                                this.ShowSourceAt(rootArtifact.Attribute("Name").Value, "X++", sl, sc, el, ec);
+                                this.ShowSourceAt(rootArtifact.Name.LocalName.ToLower() + ":" + rootArtifact.Attribute("Name").Value, "X++", sl, sc, el, ec);
                         }
                         else
                         {
@@ -456,10 +409,9 @@ namespace XppReasoningWpf
                                         // Artifact contains an encoded definition of the kind of artifact (i.e.
                                         // class, table, query, or form) that is requested, like Artifact="form:MyForm".
                                         var parts = artifact.Split(':');
-                                        if (parts.Count() == 2)
+                                        if (parts.Length == 2)
                                         {
                                             var kind = parts[0].ToLower();
-                                            var name = parts[1];
 
                                             int sl = -1, sc = -1, el = -1, ec = -1;
                                             FindPositionsInSelf(positionElement, ref sl, ref sc, ref el, ref ec);
@@ -511,7 +463,7 @@ namespace XppReasoningWpf
             {
                 var parts = name.Split(':');
 
-                if (parts.Count() == 2)
+                if (parts.Length == 2)
                 {
                     // Only support class for now.
                     // dynamics://Open/Class/SrsReportRunController/Line/1413/Column/74/ToLine/1415/ToColumn/10 
@@ -546,7 +498,7 @@ namespace XppReasoningWpf
             var tab = new Wpf.Controls.TabItem()
             {
                 Tag = name,
-                Header = name,
+                Header = new TextBlock() { Text = name },
                 Icon = new Image
                 {
                     Source = new BitmapImage(new Uri("images/Hourglass_16x.png", UriKind.Relative)),
@@ -627,107 +579,14 @@ namespace XppReasoningWpf
         }
 
         #region Font size handling
-        private void CommandBinding_IncreaseQueryFontSize(object sender, ExecutedRoutedEventArgs e)
-        {
-            Properties.Settings.Default.QueryFontSize += 2;
-        }
-        private void CommandBinding_DecreaseQueryFontSize(object sender, ExecutedRoutedEventArgs e)
-        {
-            Properties.Settings.Default.QueryFontSize -= 2;
-        }
-        private void CommandBinding_CanIncreaseQueryFontSize(object sender, CanExecuteRoutedEventArgs e)
-        {
-            if (this.queryTabPage == null)
-                e.CanExecute = false;
-            else
-            {
-                QueryEditor queryEditor = this.queryTabPage.SelectedContent as QueryEditor;
-                e.CanExecute = queryEditor == null ? false : queryEditor.FontSize < 48;
-            }
-        }
-        private void CommandBinding_CanDecreaseQueryFontSize(object sender, CanExecuteRoutedEventArgs e)
-        {
-            if (this.queryTabPage == null)
-                e.CanExecute = false;
-            else
-            {
-                QueryEditor queryEditor = this.queryTabPage.SelectedContent as QueryEditor;
-                e.CanExecute = queryEditor == null ? false : queryEditor.FontSize > 8;
-            }
-        }
 
-        private void CommandBinding_IncreaseResultsFontSize(object sender, ExecutedRoutedEventArgs e)
-        {
-            Properties.Settings.Default.ResultsFontSize += 2;
-        }
-        private void CommandBinding_DecreaseResultsFontSize(object sender, ExecutedRoutedEventArgs e)
-        {
-            Properties.Settings.Default.ResultsFontSize -= 2;
-        }
-        private void CommandBinding_CanIncreaseResultsFontSize(object sender, CanExecuteRoutedEventArgs e)
-        {
-            e.CanExecute = this.ResultsEditor == null ? false : this.ResultsEditor.FontSize < 48;
-        }
-        private void CommandBinding_CanDecreaseResultsFontSize(object sender, CanExecuteRoutedEventArgs e)
-        {
-            e.CanExecute = this.ResultsEditor == null ? false : this.ResultsEditor.FontSize > 8;
-        }
 
-        private void CommandBinding_IncreaseSourceFontSize(object sender, ExecutedRoutedEventArgs e)
-        {
-            Properties.Settings.Default.SourceFontSize += 2;
-        }
-        private void CommandBinding_DecreaseSourceFontSize(object sender, ExecutedRoutedEventArgs e)
-        {
-            Properties.Settings.Default.SourceFontSize -= 2;
-        }
-        private void CommandBinding_CanIncreaseSourceFontSize(object sender, CanExecuteRoutedEventArgs e)
-        {
-            e.CanExecute = Properties.Settings.Default.SourceFontSize < 48;
-        }
-        private void CommandBinding_CanDecreaseSourceFontSize(object sender, CanExecuteRoutedEventArgs e)
-        {
-            e.CanExecute = Properties.Settings.Default.SourceFontSize > 8;
-        }
+
+
 
         #endregion
 
-        private void CommandBinding_HelpBaseX(object sender, ExecutedRoutedEventArgs e)
-        {
-            Process.Start("http://BaseX.org");
-        }
 
-        private void CommandBinding_ShowExternalVariablesDialog(object sender, ExecutedRoutedEventArgs e)
-        {
-            var window = new ExternalVariablesControl();
-            window.ShowDialog();
-        }
-
-        private void CommandBinding_HelpXQuery(object sender, ExecutedRoutedEventArgs e)
-        {
-            Process.Start("http://www.w3.org/standards/xml/query");
-        }
-
-        private void CommandBinding_AboutBoxExecute(object sender, ExecutedRoutedEventArgs e)
-        {
-            var aboutBox = new Gat.Controls.About
-            {
-                IsSemanticVersioning = true,
-                ApplicationLogo  = new BitmapImage(new Uri(@"/Socratex;component/Images/Alecive-Flatwoken-Apps-File-Xml.ico", UriKind.Relative)),
-                PublisherLogo = new BitmapImage(new Uri(@" / Socratex;component/Images/Newer D365fo logo, inverted.png", UriKind.Relative)),
-                HyperlinkText = "https://community.dynamics.com/ax/b/newdynamicsax/",
-                AdditionalNotes = @"This app works by analysing information represented in XML stored in a native XML database (BaseX). The server is available free of charge from basex.org. The server must contain one or more databases populated with XML serialized representations of the ASTs.
-
-Credits: The application icon was created by alecive and provided under the Creative Commons Attribution-Share Alike 4.0 license. " +
-@"The about box control is Copyright (c) 2014 Christoph Gattnar and provided under the MIT license. " +
-@"The editor controls are provided by AvalonEdit, http://avalonedit.net/ provided under the MIT license. " +
-@"The extended tab control was provided by alrh under The Code Project Open License (CPOL) 1.02: https://www.codeproject.com/info/cpol10.aspx " +
-@"The splash screen artwork was created from a picture by Derek Key on https://www.flickr.com/photos/derekskey/9135166134/ and used under the Creative Commons 2.0 license: https://creativecommons.org/licenses/by/2.0/ " +
-@"This tool connects to a running Basex database with code supplied by basex under the BSD license. This app was created by Peter Villadsen."
-            };
-
-            aboutBox.Show();
-        }
 
         private async void ModelDropdown_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -736,10 +595,8 @@ Credits: The application icon was created by alecive and provided under the Crea
                 var db = e.AddedItems[0] as BaseXInterface.Database;
                 this.Model.Status = $"{db.Name}. Items: {db.Resources}, Size: {db.Size}";
 
-                using (var session = this.Model.GetSession(""))
-                {
-                    this.ResultsEditor.Text = await session.DoQueryAsync($"db:info('{db.Name}')");
-                }
+                using var session = await this.Model.GetSessionAsync("");
+                this.ResultsEditor.Text = await session.DoQueryAsync($"db:info('{db.Name}')");
             }
         }
 
@@ -755,6 +612,24 @@ Credits: The application icon was created by alecive and provided under the Crea
         private void QueryTabPage_TabItemClosing(object sender, TabItemCancelEventArgs e)
         {
             e.Cancel = !this.ViewModel.CloseQueryTab(e.TabItem);
+        }
+
+        private void QueryGroupBox_Drop(object sender, DragEventArgs e)
+        {
+            // Called when a file is dropped on the query pane
+            string[] droppedFiles = null;
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                droppedFiles = e.Data.GetData(DataFormats.FileDrop, true) as string[];
+            }
+
+            if (droppedFiles == null)
+                return;
+
+            foreach (var filename in droppedFiles)
+            {
+                this.ViewModel.OpenFileInTab(filename);
+            }
         }
     }
 }

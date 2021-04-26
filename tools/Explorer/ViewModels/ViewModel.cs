@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 using BaseXInterface;
+using ICSharpCode.SharpDevelop.Editor;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -23,147 +25,69 @@ namespace XppReasoningWpf.ViewModels
 {
     public class ViewModel : INotifyPropertyChanged
     {
-        private Model model;
-        private MainWindow view;
+        private readonly Model model;
+        private readonly MainWindow view;
 
         /// <summary>
         /// Contains the mapping from a query editor to the result that this query produced.
         /// </summary>
-        private IDictionary<QueryEditor, string> CachedQueryResult = new Dictionary<QueryEditor, string>();
+        private readonly IDictionary<QueryEditor, string> CachedQueryResult = new Dictionary<QueryEditor, string>();
 
         public event PropertyChangedEventHandler PropertyChanged;
 
-        private readonly ICommand exitApplicationCommand;
-        public ICommand ExitApplicationCommand => this.exitApplicationCommand;
+        #region Commands
+        public ICommand ExitApplicationCommand { get; private set; }
 
-        private readonly ICommand keyboardExecuteQueryCommand;
-        public ICommand KeyboardExecuteQueryCommand => this.keyboardExecuteQueryCommand;
+        public ICommand KeyboardExecuteQueryCommand { get; private set; }
 
-        private readonly ICommand keyboardCheckQueryCommand;
-        public ICommand KeyboardCheckQueryCommand => this.keyboardCheckQueryCommand;
+        public ICommand KeyboardCheckQueryCommand { get; private set; }
 
-        private readonly ICommand executeQueryCommand;
-        public ICommand ExecuteQueryCommand => this.executeQueryCommand;
+        public ICommand ExecuteQueryCommand { get; private set; }
 
-        private readonly ICommand checkQueryCommand;
-        public ICommand CheckQueryCommand => this.checkQueryCommand;
+        public ICommand CheckQueryCommand { get; private set; }
 
-        private readonly ICommand submitQueryCommand;
-        public ICommand SubmitQueryCommand => this.submitQueryCommand;
+        public ICommand SubmitQueryCommand { get; private set; }
 
-        private readonly ICommand windowsCommand;
-        public ICommand WindowsCommand
-        {
-            get => this.windowsCommand;
-        }
+        public ICommand WindowsCommand { get; private set; }
 
-        private readonly ICommand closeAllWindowsCommand;
-        public ICommand CloseAllWindowsCommand
-        {
-            get => this.closeAllWindowsCommand;
-        }
+        public ICommand CloseAllWindowsCommand { get; private set; }
 
-        private readonly ICommand saveCommand;
-        public ICommand SaveCommand
-        {
-            get => this.saveCommand;
-        }
+        public ICommand SaveCommand { get; private set; }
 
-        private readonly ICommand saveAsCommand;
-        public ICommand SaveAsCommand
-        {
-            get => this.saveAsCommand;
-        }
+        public ICommand SaveAsCommand { get; private set; }
 
-        private readonly ICommand openQueryCommand;
-        public ICommand OpenQueryCommand
-        {
-            get => this.openQueryCommand;
-        }
+        public ICommand OpenQueryCommand { get; private set; }
 
-        private readonly ICommand createNewQueryCommand;
-        public ICommand CreateNewQueryCommand
-        {
-            get => this.createNewQueryCommand;
-        }
+        public ICommand CreateNewQueryCommand { get; private set; }
 
-        private readonly ICommand openQueuedQueriesWindow;
-        public ICommand OpenQueuedQueriesWindow
-        {
-            get => this.openQueuedQueriesWindow;
-        }
+        public ICommand OpenQueuedQueriesWindow { get; private set; }
 
-        public ICommand ResultsUndoCommand
-        {
-            get => new RelayCommand(
-                p =>
-                {
-                    ResultsEditor editor = p as ResultsEditor;
-                    editor.Undo();
-                },
-                p =>
-                {
-                    if (p is ResultsEditor editor)
-                        return editor.CanUndo;
-                    else
-                        return false;
-                }
-            );
-        }
+        public ICommand AboutBoxCommand { get; private set; }
 
-        public ICommand ResultsRedoCommand
-        {
-            get => new RelayCommand(
-                p =>
-                {
-                    ResultsEditor editor = p as ResultsEditor;
-                    editor.Redo();
-                },
-                p =>
-                {
-                    if (p is ResultsEditor editor)
-                        return editor.CanRedo;
-                    else
-                        return false;
-                }
-            );
-        }
+        public ICommand XQueryHelpCommand { get; private set; }
 
-        public ICommand QueryUndoCommand
-        {
-            get => new RelayCommand(
-                p =>
-                {
-                    QueryEditor editor = p as QueryEditor;
-                    editor.Undo();
-                },
-                p =>
-                {
-                    if (p is QueryEditor editor)
-                        return editor.CanUndo;
-                    else
-                        return false;
-                }
-            );
-        }
+        public ICommand ShowExternalVariablesDialogCommand { get; private set; }
+        
+        public ICommand BaseXHelpCommand { get; private set; }
 
-        public ICommand QueryRedoCommand
-        {
-            get => new RelayCommand(
-                p =>
-                {
-                    QueryEditor editor = p as QueryEditor;
-                    editor.Redo();
-                },
-                p =>
-                {
-                    if (p is QueryEditor editor)
-                        return editor.CanRedo;
-                    else
-                        return false;
-                }
-            );
-        }
+        public ICommand SaveResultsCommand { get; private set; }
+
+        public ICommand IncreaseResultsFontSizeCommand { get; private set; }
+
+        public ICommand DecreaseResultsFontSizeCommand { get; private set; }
+
+        public ICommand IncreaseQueryFontSizeCommand { get; private set; }
+
+        public ICommand DecreaseQueryFontSizeCommand { get; private set; }
+
+        public ICommand ResultsUndoCommand { get; private set; }
+ 
+        public ICommand ResultsRedoCommand { get; private set; }
+
+        public ICommand QueryUndoCommand { get; private set; }
+
+        public ICommand QueryRedoCommand { get; private set; }
+        #endregion
 
         private Views.SubmittedQueriesWindow queuedQueriesWindow = null;
         private Views.SubmittedQueriesWindow QueuedQueriesWindow
@@ -182,17 +106,33 @@ namespace XppReasoningWpf.ViewModels
             }
         }
 
-
-        public string QueryResult
+         public string QueryResult
         {
             get { return this.model.QueryResult; }
             set
             {
-                // if (this.model.QueryResult != value)
-                {
-                    // this.model.QueryResult = value;
-                    this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueryResult)));
-                }
+                // The query result streams through here. It is not stored in the view model,
+                // only in the model.
+                // The error information from BaseX is not reliable enough to form the basis
+                // of an error squiggley.
+                //string s = value;
+                //var r = Regex.Match(s, @"Stopped at \.,\s(\d+)/(\d+):");
+                //if (r.Success)
+                //{
+                //    Group lineGroup = r.Groups[1];
+                //    Group columnGroup = r.Groups[2];
+                //    int line = int.Parse(lineGroup.Value);
+                //    int column = int.Parse(columnGroup.Value);
+
+                //    QueryEditor queryEditor = this.view.queryTabPage.SelectedContent as QueryEditor;
+
+                //    var startOffset = queryEditor.Document.GetOffset(line, column);
+                //    ITextMarker marker = queryEditor.TextMarkerService.Create(startOffset, 1);
+                //    marker.MarkerTypes = TextMarkerTypes.SquigglyUnderline;
+                //    marker.MarkerColor = Colors.Red;
+                //}
+
+                this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueryResult)));
             }
         }
 
@@ -255,6 +195,13 @@ namespace XppReasoningWpf.ViewModels
             dialog.ShowDialog();
         }
 
+        public void OpenFileInTab(string filename)
+        {
+            var name = Path.GetFileNameWithoutExtension(filename);
+            var tab = this.CreateNewQueryTabItem(name, filename, File.ReadAllText(filename));
+            this.view.queryTabPage.SelectedItem = tab;
+        }
+
         private void OpenQueryFile()
         {
             OpenFileDialog dialog = new OpenFileDialog
@@ -272,9 +219,7 @@ namespace XppReasoningWpf.ViewModels
             {
                 foreach (var filename in dialog.FileNames)
                 {
-                    var name = Path.GetFileNameWithoutExtension(filename);
-                    var tab = this.CreateNewQueryTabItem(name, filename, File.ReadAllText(filename));
-                    this.view.queryTabPage.SelectedItem = tab;
+                    this.OpenFileInTab(filename);
                 }
             }
 
@@ -285,7 +230,7 @@ namespace XppReasoningWpf.ViewModels
         /// </summary>
         /// <param name="filename">The name of the file.</param>
         /// <param name="e">Not used.</param>
-        private void SaveQueryFile(string filename, QueryEditor e)
+        private static void SaveQueryFile(string filename, QueryEditor e)
         {
             try
             {
@@ -297,7 +242,7 @@ namespace XppReasoningWpf.ViewModels
             }
         }
 
-        private string SaveQueryFileAs(QueryEditor e)
+        private static string SaveQueryFileAs(QueryEditor e)
         {
             SaveFileDialog dialog = new SaveFileDialog
             {
@@ -485,7 +430,7 @@ namespace XppReasoningWpf.ViewModels
                 }
             }
 
-            if (item.Parent is TabControl tabControl)
+            if (item.Parent is TabControl)
             {
                 // TODO: Should the structure containing the mapping of name to highest value index
                 // be updated too?
@@ -509,7 +454,8 @@ namespace XppReasoningWpf.ViewModels
             this.view = view;
             this.model = model;
 
-            model.PropertyChanged += (object sender, PropertyChangedEventArgs e) =>
+           // Take care of events bubbling up from the model.
+           model.PropertyChanged += (object sender, PropertyChangedEventArgs e) =>
             {
                 if (e.PropertyName == "CaretPositionString")
                 {
@@ -526,7 +472,15 @@ namespace XppReasoningWpf.ViewModels
                 else if (e.PropertyName == "SelectedDatabase")
                 {
                     this.SelectedDatabase = model.SelectedDatabase;
-                    this.UpdateConnectionInfo(model);
+                    this.UpdateConnectionInfo();
+                }
+                else if (e.PropertyName == "DatabaseOpening")
+                {
+                    this.Status = "Opening database...";
+                }
+                else if (e.PropertyName == "DatabaseOpened")
+                {
+                    this.Status = "";
                 }
                 else if (e.PropertyName == "QueryResult")
                 {
@@ -534,7 +488,7 @@ namespace XppReasoningWpf.ViewModels
                 }
                 else if (e.PropertyName == "Username" || e.PropertyName == "HostName" || e.PropertyName == "SelectedDatabase")
                 {
-                    this.UpdateConnectionInfo(model);
+                    this.UpdateConnectionInfo();
                 }
                 else
                 {
@@ -542,44 +496,107 @@ namespace XppReasoningWpf.ViewModels
                 }
             };
 
-            this.openQueryCommand = new RelayCommand(
+            this.AboutBoxCommand = new RelayCommand(
+                p =>
+                {
+                    var aboutBox = new Views.AboutBox();
+                    aboutBox.Show();
+                }
+            );
+
+            this.XQueryHelpCommand = new RelayCommand(
+                p =>
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "https://www.w3.org/standards/xml/query",
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                }
+            );
+
+            this.BaseXHelpCommand = new RelayCommand(
+                p =>
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "http://BaseX.org",
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                }
+            );
+
+            this.ShowExternalVariablesDialogCommand = new RelayCommand(
+                p =>
+                {
+                    var window = new ExternalVariablesControl();
+                    window.ShowDialog();
+                }
+            );
+
+            this.SaveResultsCommand = new RelayCommand(
+                p =>
+                {
+                    var dialog = new SaveFileDialog
+                    {
+                        DefaultExt = ".xml",
+                        AddExtension = true,
+                        Filter = "XML files (*.xml)|*.xml|CSV (Comma delimited) (*.csv)|*.csv|All files (*.*)|*.*",
+                    };
+
+                    var documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                    dialog.InitialDirectory = string.Format(Properties.Settings.Default.QueriesPath, documentsFolder);
+
+                    bool? res = dialog.ShowDialog();
+
+                    if (res.HasValue && res.Value)
+                    {
+                        var stream = dialog.OpenFile();
+                        this.view.ResultsEditor.Save(stream);
+                    }
+                }
+            );
+            
+            this.OpenQueryCommand = new RelayCommand(
                 p =>
                 {
                     this.OpenQueryFile();
                 }
             );
 
-            this.exitApplicationCommand = new RelayCommand(
+            this.ExitApplicationCommand = new RelayCommand(
                 p => {
-                    Application.Current.Shutdown();
+                    this.view.Close();
                 });
 
-            this.keyboardExecuteQueryCommand = new RelayCommand(
+            this.KeyboardExecuteQueryCommand = new RelayCommand(
                 p =>
                 {
                     var item = view.queryTabPage.SelectedItem as Wpf.Controls.TabItem;
-                    this.executeQueryCommand.Execute(item.Content);
+                    this.ExecuteQueryCommand.Execute(item.Content);
                 },
                 p =>
                 {
                     var item = view.queryTabPage.SelectedItem as Wpf.Controls.TabItem;
-                    return this.executeQueryCommand.CanExecute(item.Content);
+                    return this.ExecuteQueryCommand.CanExecute(item.Content);
                 });
 
-            this.keyboardCheckQueryCommand = new RelayCommand(
+            this.KeyboardCheckQueryCommand = new RelayCommand(
                 p =>
                 {
                     var item = view.queryTabPage.SelectedItem as Wpf.Controls.TabItem;
-                    this.checkQueryCommand.Execute(item.Content);
+                    this.CheckQueryCommand.Execute(item.Content);
                 },
                 p =>
                 {
                     var item = view.queryTabPage.SelectedItem as Wpf.Controls.TabItem;
-                    return this.checkQueryCommand.CanExecute(item.Content);
+                    return this.CheckQueryCommand.CanExecute(item.Content);
                 });
 
 
-            this.windowsCommand = new RelayCommand(
+            this.WindowsCommand = new RelayCommand(
                 p =>
                 {
                     this.OpenWindowsDialog();
@@ -587,7 +604,7 @@ namespace XppReasoningWpf.ViewModels
                 p => { return true; }
             );
 
-            this.closeAllWindowsCommand = new RelayCommand(
+            this.CloseAllWindowsCommand = new RelayCommand(
                 p =>
                 {
                     this.view.DetailsTab.Items.Clear();
@@ -595,7 +612,7 @@ namespace XppReasoningWpf.ViewModels
                 p => this.view.DetailsTab.Items.Count > 0
             );
 
-            this.saveCommand = new RelayCommand(
+            this.SaveCommand = new RelayCommand(
                 p => // The parameter is the index of the selected tab
                 {
                     var tab = view.queryTabPage.SelectedValue as Wpf.Controls.TabItem;
@@ -603,7 +620,7 @@ namespace XppReasoningWpf.ViewModels
 
                     if (string.IsNullOrEmpty(tab.Tag as string))
                     {
-                        var filename = this.SaveQueryFileAs(editor);
+                        var filename = SaveQueryFileAs(editor);
                         if (filename != null)
                         {
                             // The user entered a file, he did not cancel
@@ -617,7 +634,7 @@ namespace XppReasoningWpf.ViewModels
                     }
                     else
                     {
-                        this.SaveQueryFile(tab.Tag as string, editor);
+                        SaveQueryFile(tab.Tag as string, editor);
                         editor.IsModified = false;
                     }
                 },
@@ -627,13 +644,13 @@ namespace XppReasoningWpf.ViewModels
                 }
             );
 
-            this.saveAsCommand = new RelayCommand(
+            this.SaveAsCommand = new RelayCommand(
                 p => // The parameter is the index of the selected tab
                 {
                     var tab = view.queryTabPage.SelectedValue as Wpf.Controls.TabItem;
                     var editor = tab.Content as QueryEditor;
 
-                    var filename = this.SaveQueryFileAs(editor);
+                    var filename = SaveQueryFileAs(editor);
                     if (filename != null)
                     {
                         tab.Tag = filename;
@@ -650,15 +667,14 @@ namespace XppReasoningWpf.ViewModels
                 }
             );
 
-            this.createNewQueryCommand = new RelayCommand(
+            this.CreateNewQueryCommand = new RelayCommand(
                 p =>
                 {
                     this.view.queryTabPage.SelectedItem = this.CreateNewQueryTabItem();
                 }
             );
 
-
-            this.openQueuedQueriesWindow = new RelayCommand(
+            this.OpenQueuedQueriesWindow = new RelayCommand(
                 p =>
                 {
                     // Open the queued queries window. This is a singleton
@@ -667,7 +683,107 @@ namespace XppReasoningWpf.ViewModels
 
                 });
 
-            this.executeQueryCommand = new RelayCommand(
+
+            this.IncreaseResultsFontSizeCommand = new RelayCommand(
+                p1 => Properties.Settings.Default.ResultsFontSize += 2,
+                p2 => this.view.ResultsEditor != null && this.view.ResultsEditor.FontSize < 48
+            );
+        
+
+            this.DecreaseResultsFontSizeCommand = new RelayCommand(
+                p1 => Properties.Settings.Default.ResultsFontSize -= 2,
+                p2 => this.view.ResultsEditor != null && this.view.ResultsEditor.FontSize > 8
+            );
+        
+
+            this.IncreaseQueryFontSizeCommand = new RelayCommand(
+                p1 => Properties.Settings.Default.QueryFontSize += 2,
+                p2 =>
+                {
+                    if (this.view.queryTabPage == null)
+                        return false;
+                    else
+                    {
+                        return this.view.queryTabPage.SelectedContent is QueryEditor queryEditor && queryEditor.FontSize < 48;
+                    }
+                });
+        
+
+            this.DecreaseQueryFontSizeCommand = new RelayCommand(
+                p1 => Properties.Settings.Default.QueryFontSize -= 2,
+                p2 =>
+                {
+                    if (this.view.queryTabPage == null)
+                        return false;
+                    else
+                    {
+                        return this.view.queryTabPage.SelectedContent is QueryEditor queryEditor && queryEditor.FontSize > 8;
+                    }
+                }
+            );
+        
+            this.ResultsUndoCommand = new RelayCommand(
+                p =>
+                {
+                    ResultsEditor editor = p as ResultsEditor;
+                    editor.Undo();
+                },
+                p =>
+                {
+                    if (p is ResultsEditor editor)
+                        return editor.CanUndo;
+                    else
+                        return false;
+                }
+            );
+        
+            this.ResultsRedoCommand = new RelayCommand(
+                p =>
+                {
+                    ResultsEditor editor = p as ResultsEditor;
+                    editor.Redo();
+                },
+                p =>
+                {
+                    if (p is ResultsEditor editor)
+                        return editor.CanRedo;
+                    else
+                        return false;
+                }
+            );
+
+            this.QueryUndoCommand = new RelayCommand(
+                p =>
+                {
+                    QueryEditor editor = p as QueryEditor;
+                    editor.Undo();
+                },
+                p =>
+                {
+                    if (p is QueryEditor editor)
+                        return editor.CanUndo;
+                    else
+                        return false;
+                }
+            );
+        
+
+            this.QueryRedoCommand = new RelayCommand(
+                p =>
+                {
+                    QueryEditor editor = p as QueryEditor;
+                    editor.Redo();
+                },
+                p =>
+                {
+                    if (p is QueryEditor editor)
+                        return editor.CanRedo;
+                    else
+                        return false;
+                }
+            );
+
+            this.ExecuteQueryCommand = new RelayCommand(
                 async p =>
                 {
                     var queryEditor = p as QueryEditor;
@@ -689,7 +805,7 @@ namespace XppReasoningWpf.ViewModels
                     queryExecutionTime.Start();
 
                     var tabItem = queryEditor.Parent as Wpf.Controls.TabItem;
-                    using (var session = model.Server.GetSession(this.model.SelectedDatabase.Name))
+                    using (var session = await model.Server.GetSessionAsync(this.model.SelectedDatabase.Name))
                     {
                         try
                         {
@@ -740,7 +856,7 @@ namespace XppReasoningWpf.ViewModels
                         return false;
                 });
 
-            this.checkQueryCommand = new RelayCommand(
+            this.CheckQueryCommand = new RelayCommand(
                async p =>
                {
                    var queryEditor = p as QueryEditor;
@@ -761,7 +877,7 @@ namespace XppReasoningWpf.ViewModels
                    Stopwatch queryCheckTime = new Stopwatch();
                    queryCheckTime.Start();
 
-                   using (var session = model.Server.GetSession(this.model.SelectedDatabase.Name))
+                   using (var session = await model.Server.GetSessionAsync(this.model.SelectedDatabase.Name))
                    {
                        try
                        {
@@ -803,7 +919,7 @@ namespace XppReasoningWpf.ViewModels
                });
 
 
-            this.submitQueryCommand = new RelayCommand(
+            this.SubmitQueryCommand = new RelayCommand(
               async p =>
               {
                   var queryEditor = p as QueryEditor;
@@ -823,10 +939,8 @@ namespace XppReasoningWpf.ViewModels
                   string result;
                   try
                   {
-                      using (var session = this.model.GetSession(this.model.SelectedDatabase.Name))
-                      {
-                          result = await session.SubmitQueryAsync(query);
-                      }
+                      using var session = await this.model.GetSessionAsync(this.model.SelectedDatabase.Name);
+                      result = await session.SubmitQueryAsync(query);
                   }
                   catch (Exception e)
                   {
@@ -851,22 +965,19 @@ namespace XppReasoningWpf.ViewModels
         /// Called when the system shuts down. This method will stop all interactive jobs
         /// that the user may have started, so they do not burden the server.
         /// </summary>
-        public void Closedown()
+        public async Task ClosedownAsync()
         {
             // Shut down any running interactive queries
             string result = "";
             const string jobDetailsQuery = "xquery jobs:list-details()";
 
-            using (var session = this.model.GetSession(""))
+            using (var session = this.model.GetSessionAsync("").Result)
             {
                 result = $"<Jobs>{session.Execute(jobDetailsQuery)}</Jobs>";
             }
             XDocument document = XDocument.Parse(result);
 
-            // Build the list from the server:
-            IList<SubmittedQueryDescriptor> serverList = new List<SubmittedQueryDescriptor>();
-
-            using (var session = this.model.GetSession(""))
+            using (var session = this.model.GetSessionAsync("").Result)
             {
                 foreach (var job in document.Document.XPathSelectElements("//job"))
                 {
@@ -882,10 +993,10 @@ namespace XppReasoningWpf.ViewModels
                     }
                 }
             }
-            this.model.CloseConnectionToServer();
+            await this.model.CloseConnectionToServerAsync();
         }
 
-        private void UpdateConnectionInfo(Model model)
+        private void UpdateConnectionInfo()
         {
             this.Title = Properties.Settings.Default.AppTitle + "  - " + this.model.ConnectionString;
         }

@@ -6,6 +6,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Threading.Tasks;
+using System.Windows.Threading;
+using System.Threading;
 
 namespace XppReasoningWpf
 {
@@ -14,13 +17,14 @@ namespace XppReasoningWpf
     /// </summary>
     public partial class ConnectionWindow : Window
     {
-        private Model model;
+        private readonly Model model;
 
         public ConnectionWindow(Model model)
         {
-            InitializeComponent();
             this.DataContext = model;
             this.model = model;
+
+            InitializeComponent();
         }
 
         protected override void OnInitialized(EventArgs e)
@@ -36,33 +40,46 @@ namespace XppReasoningWpf
         public string Username { get { return this.UsernameControl.Text; } }
         public string Password { get { return this.PasswordControl.Password; } }
 
-        private void OkButtonClicked(object sender, RoutedEventArgs e)
+        private async void OkButtonClicked(object sender, RoutedEventArgs e)
         {
             this.StatusControl.Content = "Connecting...";
 
-            bool connectionEstablished = this.model.IsServerOnline(
-                Properties.Settings.Default.Server, Properties.Settings.Default.Port,
-                this.Username, this.Password);
+            // Allow this UI change to propagate through the message pump:
+            Application.Current.Dispatcher.Invoke(DispatcherPriority.Background, new ThreadStart(() => { }));
 
-            if (connectionEstablished)
+            var oldCursor = Mouse.OverrideCursor;
+            Mouse.OverrideCursor = Cursors.Wait; // set the cursor to loading spinner
+
+            try
             {
-                this.model.Username = this.Username;
-                this.model.HostName = this.ServerNameControl.Text;
 
-                this.DialogResult = true;
-                this.model.CreateServer(
-                    Properties.Settings.Default.Server, Properties.Settings.Default.Port, this.Username, this.Password);
+                bool connectionEstablished = await this.model.IsServerOnlineAsync(
+                    Properties.Settings.Default.Server, Properties.Settings.Default.Port,
+                    this.Username, this.Password);
+
+                if (connectionEstablished)
+                {
+                    this.model.Username = this.Username;
+                    this.model.HostName = this.ServerNameControl.Text;
+
+                    this.DialogResult = true;
+                    this.model.CreateServer(Properties.Settings.Default.Server, Properties.Settings.Default.Port, this.Username, this.Password);
 
 #if !NETCOREAPP
                 var telemetry = (Application.Current as App).Telemetry;
                 if (telemetry != null)
                     telemetry.Context.User.AccountId = this.Username;
 #endif
+                }
+                else
+                {
+                    this.StatusControl.Content = "Unable to connect, or bad credentials provided.";
+                    this.model.HostName = "";
+                }
             }
-            else
+            finally
             {
-                this.StatusControl.Content = "Unable to connect, or bad credentials provided.";
-                this.model.HostName = "";
+                Mouse.OverrideCursor = oldCursor;
             }
         }
 
@@ -120,7 +137,26 @@ namespace XppReasoningWpf
         /// <param name="e">Not used</param>
         private void UserNameTextChanged(object sender, TextChangedEventArgs e)
         {
-            this.StatusControl.Content = string.Empty;
+            if (this.StatusControl != null)
+            {
+                this.StatusControl.Content = string.Empty;
+            }
+        }
+
+        private void PortControl_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (this.StatusControl != null)
+            {
+                this.StatusControl.Content = string.Empty;
+            }
+        }
+
+        private void ServerNameControl_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (this.StatusControl != null)
+            {
+                this.StatusControl.Content = string.Empty;
+            }
         }
     }
 }

@@ -12,6 +12,7 @@ namespace XppReasoningWpf
     using BaseXInterface;
     using System.IO;
     using System.Text.RegularExpressions;
+    using System.Threading.Tasks;
     using System.Windows.Threading;
 
     /// <summary>
@@ -188,27 +189,29 @@ namespace XppReasoningWpf
 
         public void CreateServer(string server, int port, string username, string password)
         {
-            this.Server = new BaseXInterface.BaseXServer(server, port, username, password);
+            this.Server = new BaseXServer(server, port, username, password);
+            this.Server.DatabaseOpening += (databaseName) => { this.OnPropertyChanged("DatabaseOpening"); };
+            this.Server.DatabaseOpened += (databaseName) => { this.OnPropertyChanged("DatabaseOpened"); };
         }
 
-        public void CloseConnectionToServer()
+        public async Task CloseConnectionToServerAsync()
         {
             if (this.Server != null)
-                this.Server.CloseConnection();
+                await this.Server.CloseConnectionAsync();
 
             this.Server = null;
         }
-        public DatabaseSession GetSession(string database)
+        public async Task<DatabaseSession> GetSessionAsync(string database)
         {
-            return this.Server.GetSession(database);
+            return await this.Server.GetSessionAsync(database);
         }
 
-        public bool IsServerOnline(string host, int port, string username, string password)
+        public async Task<bool>  IsServerOnlineAsync(string host, int port, string username, string password)
         {
             try
             {
                 var session = new Session(host, port, username, password);
-                session.Execute("show users");
+                await session.ExecuteAsync("show users");
                 session.Close();
             }
             catch (Exception)

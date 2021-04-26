@@ -7,10 +7,15 @@ using System.Windows.Input;
 
 namespace AstVisualizer
 {
+    using ICSharpCode.AvalonEdit;
+    using ICSharpCode.AvalonEdit.AddIn;
     using ICSharpCode.AvalonEdit.Highlighting;
+    using ICSharpCode.SharpDevelop.Editor;
     using LanguageExtractorInterfaces;
+    using System.ComponentModel.Design;
     using System.IO;
     using System.Reflection;
+    using System.Windows.Threading;
     using System.Xml;
 
     /// <summary>
@@ -28,11 +33,28 @@ namespace AstVisualizer
             private set; get;
         }
 
+        public TextMarkerService SourceEditorTextMarkerService { get; set; }
+        public TextMarkerService ResultsEditorTextMarkerService { get; set; }
+        public TextMarkerService QueryEditorTextMarkerService { get; set; }
+        public TextMarkerService QueryResultsEditorTextMarkerService { get; set; }
+
         void EditorPositionChanged(object sender, EventArgs a)
         {
             var caret = sender as ICSharpCode.AvalonEdit.Editing.Caret;
             var vm = this.DataContext as ViewModel;
             vm.CaretPositionString = string.Format("Line: {0} Column: {1}", caret.Line, caret.Column);
+        }
+
+        private static TextMarkerService CreateTextMarkerService(TextEditor editor)
+        {
+            var textMarkerService = new TextMarkerService(editor.Document);
+            editor.TextArea.TextView.BackgroundRenderers.Add(textMarkerService);
+            editor.TextArea.TextView.LineTransformers.Add(textMarkerService);
+            IServiceContainer services = (IServiceContainer)editor.Document.ServiceProvider.GetService(typeof(IServiceContainer));
+            if (services != null)
+                services.AddService(typeof(ITextMarkerService), textMarkerService);
+
+            return textMarkerService;
         }
 
         public MainWindow()
@@ -52,6 +74,29 @@ namespace AstVisualizer
             ICSharpCode.AvalonEdit.Search.SearchPanel.Install(this.ResultsEditor.TextArea);
             ICSharpCode.AvalonEdit.Search.SearchPanel.Install(this.QueryEditor.TextArea);
             ICSharpCode.AvalonEdit.Search.SearchPanel.Install(this.QueryResultsEditor.TextArea);
+
+            // Initialize the text marker services for the editors, so squiggley lines can be added
+            this.SourceEditorTextMarkerService = CreateTextMarkerService(this.SourceEditor);
+            this.ResultsEditorTextMarkerService = CreateTextMarkerService(this.ResultsEditor);
+            this.QueryEditorTextMarkerService = CreateTextMarkerService(this.QueryEditor);
+            this.QueryResultsEditorTextMarkerService = CreateTextMarkerService(this.QueryResultsEditor);
+
+            DispatcherTimer sourceEditorTimer = new DispatcherTimer() { IsEnabled = false };
+            sourceEditorTimer.Interval = TimeSpan.FromSeconds(2);
+            sourceEditorTimer.Stop();
+
+            //sourceEditorTimer.Tick += (object s, EventArgs ea) =>
+            //{
+            //    ViewModel.ExecuteExtractionCommand.Execute(null);
+            //    (s as DispatcherTimer).Stop();
+            //};
+
+            this.SourceEditor.TextChanged += (object sender, EventArgs e) =>
+            {
+                sourceEditorTimer.Stop();
+                sourceEditorTimer.Start();
+            };
+
         }
 
         private void ResultsEditor_MouseWheel(object sender, MouseWheelEventArgs e)

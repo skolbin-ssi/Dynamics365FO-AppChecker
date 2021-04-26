@@ -21,6 +21,8 @@ let $r := <MethodsOnTables>
                   else if (lower-case($m/@IsInternal) = 'true') then "internal"
                   else "public"
     return <Record>
+        <Package>{lower-case($a/@Package)}</Package>
+        <Artifact>{lower-case($a/@Artifact)}</Artifact>
         <Name>{lower-case($a/@Name)}</Name>
         <Method>{lower-case($m/@Name)}</Method>
         <IsAbstract>{lower-case($m/@IsAbstract)}</IsAbstract>
