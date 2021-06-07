@@ -181,6 +181,7 @@
     <None Remove="Resources\SourcecodeSymbols\ValueType_16x.svg" />
     <None Remove="Resources\SourcecodeSymbols\View_16x.svg" />
     <None Remove="Resources\SourcecodeSymbols\XMLFile_16x.svg" />
+    <None Include="..\.editorconfig" Link=".editorconfig" />
     <None Include="LICENSE.txt">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
@@ -371,6 +372,7 @@
       <ProjectReference Include="..\Plugins\XppProgrammingPlugins.netcore.csproj" />
       <ProjectReference Include="..\SocratexGraphExplorer.Common.netcore\SocratexGraphExplorer.Common.netcore.csproj" />
       <ProjectReference Include="..\SocratexGraphExplorer.DefaultRenderers.netcore\SocratexGraphExplorer.DefaultRenderers.netcore.csproj" />
+      <ProjectReference Include="..\SocratexGraphExplorer.SourceEditor.netcore\SocratexGraphExplorer.SourceEditor.netcore.csproj" />
     </ItemGroup>
     <ItemGroup>
       <Compile Update="Properties\Settings.Designer.cs">
